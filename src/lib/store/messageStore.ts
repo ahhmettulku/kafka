@@ -1,41 +1,59 @@
 import { Message } from '../kafka/types';
+import { getRedisClient } from '../redis/client';
 
-// In-memory storage (for production, use Redis or a database)
-const messages: Message[] = [];
+const REDIS_KEY = 'messages';
+const REDIS_CHANNEL = 'new-messages';
 const MAX_MESSAGES = 100;
 
-// Event emitter for real-time updates
-type Listener = (message: Message) => void;
-const listeners: Listener[] = [];
+/**
+ * Add a message to Redis
+ * This is called by the Kafka consumer
+ */
+export async function addMessage(message: Message): Promise<void> {
+  const redis = getRedisClient();
 
-export function addMessage(message: Message) {
-  messages.unshift(message);
+  // 1. Store message in Redis List (LPUSH adds to the beginning)
+  await redis.lpush(REDIS_KEY, JSON.stringify(message));
 
-  // Keep only last 100 messages
-  if (messages.length > MAX_MESSAGES) {
-    messages.pop();
-  }
+  // 2. Keep only the last MAX_MESSAGES
+  await redis.ltrim(REDIS_KEY, 0, MAX_MESSAGES - 1);
 
-  // Notify all listeners
-  listeners.forEach(listener => listener(message));
+  // 3. Publish to Redis Pub/Sub for real-time updates
+  await redis.publish(REDIS_CHANNEL, JSON.stringify(message));
+
+  console.log('[MessageStore] Message added and published:', message.id);
 }
 
-export function getMessages(limit: number = 50): Message[] {
-  return messages.slice(0, limit);
+/**
+ * Get messages from Redis
+ * This is called by the API route
+ */
+export async function getMessages(limit: number = 50): Promise<Message[]> {
+  const redis = getRedisClient();
+
+  // Get messages from Redis List (LRANGE gets a range)
+  const messagesJson = await redis.lrange(REDIS_KEY, 0, limit - 1);
+
+  // Parse JSON strings back to Message objects
+  const messages = messagesJson.map((json: string) => JSON.parse(json) as Message);
+
+  return messages;
 }
 
-export function subscribe(listener: Listener): () => void {
-  listeners.push(listener);
-
-  // Return unsubscribe function
-  return () => {
-    const index = listeners.indexOf(listener);
-    if (index > -1) {
-      listeners.splice(index, 1);
-    }
-  };
+/**
+ * Get the Redis Pub/Sub channel name
+ * Used by SSE route to subscribe
+ */
+export function getPubSubChannel(): string {
+  return REDIS_CHANNEL;
 }
 
-export function clearMessages() {
-  messages.length = 0;
+/**
+ * Clear all messages from Redis
+ * Useful for testing
+ */
+export async function clearMessages(): Promise<void> {
+  const redis = getRedisClient();
+  await redis.del(REDIS_KEY);
+  console.log('[MessageStore] All messages cleared');
 }

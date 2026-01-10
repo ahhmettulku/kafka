@@ -13,33 +13,54 @@ export default function MessageBoard() {
     // Fetch initial messages
     fetchMessages();
 
-    // Connect to SSE for real-time updates
-    const eventSource = new EventSource('/api/messages/stream');
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: NodeJS.Timeout;
 
-    eventSource.onopen = () => {
-      setIsConnected(true);
-      console.log('SSE connected');
-    };
+    const connect = () => {
+      try {
+        // Connect to SSE for real-time updates
+        eventSource = new EventSource('/api/messages/stream');
 
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+        eventSource.onopen = () => {
+          setIsConnected(true);
+          console.log('SSE connected');
+        };
 
-      if (data.type === 'connected') {
-        console.log('SSE connection confirmed');
-        return;
+        eventSource.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+
+          if (data.type === 'connected') {
+            console.log('SSE connection confirmed');
+            return;
+          }
+
+          // Add new message to the top
+          setMessages((prev) => [data, ...prev]);
+        };
+
+        eventSource.onerror = (error) => {
+          console.error('SSE error:', error);
+          console.error('SSE readyState:', eventSource?.readyState);
+          setIsConnected(false);
+
+          // Close the failed connection
+          eventSource?.close();
+
+          // Retry connection after 3 seconds
+          console.log('Reconnecting in 3 seconds...');
+          reconnectTimeout = setTimeout(connect, 3000);
+        };
+      } catch (error) {
+        console.error('Failed to create EventSource:', error);
+        setIsConnected(false);
       }
-
-      // Add new message to the top
-      setMessages((prev) => [data, ...prev]);
     };
 
-    eventSource.onerror = () => {
-      setIsConnected(false);
-      console.error('SSE error');
-    };
+    connect();
 
     return () => {
-      eventSource.close();
+      clearTimeout(reconnectTimeout);
+      eventSource?.close();
     };
   }, []);
 

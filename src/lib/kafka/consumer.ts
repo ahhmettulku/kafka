@@ -37,8 +37,8 @@ export async function startConsumer() {
           id: parsedMessage.id
         });
 
-        // Store message in memory
-        addMessage(parsedMessage);
+        // Store message in Redis and publish to Pub/Sub
+        await addMessage(parsedMessage);
       } catch (error) {
         console.error('Error processing message:', error);
       }

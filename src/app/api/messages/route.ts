@@ -3,6 +3,9 @@ import { sendMessage } from '@/lib/kafka/producer';
 import { Message } from '@/lib/kafka/types';
 import { getMessages } from '@/lib/store/messageStore';
 
+// Ensure dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -40,7 +43,14 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  const messages = getMessages(50);
-
-  return NextResponse.json({ messages });
+  try {
+    const messages = await getMessages(50);
+    return NextResponse.json({ messages });
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch messages' },
+      { status: 500 }
+    );
+  }
 }

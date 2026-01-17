@@ -1,0 +1,350 @@
+groups:
+  - name: kafka_alerts
+    interval: 30s
+    rules:
+      # Alert when lag is growing - indicates consumer can't keep up with producer
+      - alert: KafkaConsumerLagGrowing
+        expr: deriv(kafka_consumer_lag[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer lag is growing"
+          description: "Consumer lag is increasing at {{ $value | printf \"%.1f\" }} messages/sec for topic {{ $labels.topic }}, partition {{ $labels.partition }}. Consumer cannot keep up with producer."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-consumer-lag-growing"
+
+      # Alert when lag is growing rapidly - consumer is falling behind fast
+      - alert: KafkaConsumerLagGrowingFast
+        expr: deriv(kafka_consumer_lag[5m]) > 100
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka consumer lag is growing rapidly"
+          description: "Consumer lag is increasing at {{ $value | printf \"%.1f\" }} messages/sec for topic {{ $labels.topic }}, partition {{ $labels.partition }}. Immediate attention required."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-consumer-lag-growing-critical"
+
+      # Alert based on time-to-drain: how long to catch up at current consumption rate
+      - alert: KafkaHighTimeToDrain
+        expr: |
+          (
+            kafka_consumer_lag
+            /
+            (rate(kafka_consumer_messages_consumed_total{status="success"}[5m]) > 0)
+          ) > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Kafka consumer time-to-drain"
+          description: "At current consumption rate, it will take {{ $value | humanizeDuration }} to drain the backlog for topic {{ $labels.topic }}, partition {{ $labels.partition }}."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-time-to-drain"
+
+      # Critical: would take more than 30 minutes to catch up
+      - alert: KafkaCriticalTimeToDrain
+        expr: |
+          (
+            kafka_consumer_lag
+            /
+            (rate(kafka_consumer_messages_consumed_total{status="success"}[5m]) > 0)
+          ) > 1800
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical Kafka consumer time-to-drain"
+          description: "At current consumption rate, it will take {{ $value | humanizeDuration }} to drain the backlog for topic {{ $labels.topic }}, partition {{ $labels.partition }}. SLA breach imminent."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-time-to-drain-critical"
+
+      # Alert when consumption rate drops significantly (consumer slowdown)
+      - alert: KafkaConsumerThroughputDrop
+        expr: |
+          (
+            rate(kafka_consumer_messages_consumed_total{status="success"}[5m])
+            /
+            rate(kafka_consumer_messages_consumed_total{status="success"}[1h] offset 5m)
+          ) < 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer throughput dropped"
+          description: "Consumer throughput dropped to {{ $value | humanizePercentage }} of its hourly average for topic {{ $labels.topic }}. Possible consumer degradation."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-consumer-throughput-drop"
+
+      - alert: KafkaProducerErrors
+        expr: rate(kafka_producer_messages_sent_total{status="error"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka producer errors detected"
+          description: "Producer error rate is {{ $value }} per second on topic {{ $labels.topic }}"
+          runbook_url: "https://wiki.company.com/runbooks/kafka-producer-errors"
+
+      - alert: KafkaConsumerErrors
+        expr: rate(kafka_consumer_messages_consumed_total{status="error"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka consumer errors detected"
+          description: "Consumer error rate is {{ $value }} per second on topic {{ $labels.topic }}"
+          runbook_url: "https://wiki.company.com/runbooks/kafka-consumer-errors"
+
+      - alert: KafkaHighConsumerLagSeconds
+        expr: kafka_consumer_lag_seconds > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer time lag is high"
+          description: "Consumer is {{ $value }}s behind for topic {{ $labels.topic }}, partition {{ $labels.partition }}. Messages are delayed."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-consumer-lag-seconds"
+
+      - alert: KafkaCriticalConsumerLagSeconds
+        expr: kafka_consumer_lag_seconds > 300
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka consumer time lag is critical"
+          description: "Consumer is {{ $value }}s ({{ $value | humanizeDuration }}) behind for topic {{ $labels.topic }}, partition {{ $labels.partition }}. SLA breach likely."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-consumer-lag-seconds-critical"
+
+  - name: redis_alerts
+    interval: 30s
+    rules:
+      - alert: RedisConnectionDown
+        expr: redis_connection_status == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis connection is down"
+          description: "Redis {{ $labels.client_type }} connection is unavailable"
+          runbook_url: "https://wiki.company.com/runbooks/redis-connection-down"
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis memory usage is at {{ $value | humanizePercentage }}. Risk of evictions or OOM."
+          runbook_url: "https://wiki.company.com/runbooks/redis-memory-high"
+
+      - alert: RedisMemoryCritical
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis memory critically high"
+          description: "Redis memory usage is at {{ $value | humanizePercentage }}. Immediate action required to prevent data loss."
+          runbook_url: "https://wiki.company.com/runbooks/redis-memory-critical"
+
+      - alert: RedisConnectionPoolExhaustion
+        expr: redis_connection_pool_available / redis_connection_pool_size < 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis connection pool nearly exhausted"
+          description: "Only {{ $value | humanizePercentage }} of Redis connections available. Application may experience connection timeouts."
+          runbook_url: "https://wiki.company.com/runbooks/redis-pool-exhaustion"
+
+      - alert: RedisConnectionPoolLow
+        expr: redis_connection_pool_available / redis_connection_pool_size < 0.3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis connection pool running low"
+          description: "Only {{ $value | humanizePercentage }} of Redis connections available. Consider scaling or investigating connection leaks."
+          runbook_url: "https://wiki.company.com/runbooks/redis-pool-low"
+
+      - alert: RedisSlowOperations
+        expr: histogram_quantile(0.95, rate(redis_operation_duration_seconds_bucket[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis operations are slow"
+          description: "95th percentile latency is {{ $value }}s for operation {{ $labels.operation }}"
+          runbook_url: "https://wiki.company.com/runbooks/redis-slow-operations"
+
+      - alert: RedisSlowOperationsCritical
+        expr: histogram_quantile(0.95, rate(redis_operation_duration_seconds_bucket[5m])) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis operations critically slow"
+          description: "95th percentile latency is {{ $value }}s for operation {{ $labels.operation }}. Application performance severely impacted."
+          runbook_url: "https://wiki.company.com/runbooks/redis-slow-operations-critical"
+
+      - alert: RedisOperationErrors
+        expr: rate(redis_operations_total{status="error"}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis operation errors detected"
+          description: "Error rate is {{ $value }} per second for operation {{ $labels.operation }}. May cascade to application failures."
+          runbook_url: "https://wiki.company.com/runbooks/redis-operation-errors"
+
+      - alert: RedisEvictions
+        expr: rate(redis_evicted_keys_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis is evicting keys"
+          description: "Redis is evicting {{ $value }} keys per second due to memory pressure. Data loss may be occurring."
+          runbook_url: "https://wiki.company.com/runbooks/redis-evictions"
+
+  - name: http_alerts
+    interval: 30s
+    rules:
+      - alert: HighHTTPErrorRate
+        expr: |
+          (
+            rate(http_requests_total{status_code=~"5.."}[5m])
+            /
+            rate(http_requests_total[5m])
+          ) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High HTTP error rate"
+          description: "5xx error rate is {{ $value | humanizePercentage }} on {{ $labels.route }}"
+          runbook_url: "https://wiki.company.com/runbooks/http-error-rate"
+
+      - alert: HTTPErrorRateWarning
+        expr: |
+          (
+            rate(http_requests_total{status_code=~"5.."}[5m])
+            /
+            rate(http_requests_total[5m])
+          ) > 0.005
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Elevated HTTP error rate"
+          description: "5xx error rate is {{ $value | humanizePercentage }} on {{ $labels.route }}"
+          runbook_url: "https://wiki.company.com/runbooks/http-error-rate-warning"
+
+      - alert: SlowHTTPResponses
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow HTTP responses detected"
+          description: "95th percentile response time is {{ $value }}s on {{ $labels.route }}"
+          runbook_url: "https://wiki.company.com/runbooks/http-slow-responses"
+
+      - alert: SlowHTTPResponsesCritical
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP responses critically slow"
+          description: "95th percentile response time is {{ $value }}s on {{ $labels.route }}. Users are severely impacted."
+          runbook_url: "https://wiki.company.com/runbooks/http-slow-responses-critical"
+
+      - alert: HighHTTPRequestLatencyP99
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High P99 HTTP latency"
+          description: "99th percentile response time is {{ $value }}s on {{ $labels.route }}. Tail latency affecting some users."
+          runbook_url: "https://wiki.company.com/runbooks/http-p99-latency"
+
+  - name: sse_alerts
+    interval: 30s
+    rules:
+      - alert: SSEConnectionDrops
+        expr: rate(sse_connections_total{status="disconnected", reason!~"client_closed|timeout"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High SSE connection drop rate"
+          description: "SSE connections are dropping unexpectedly at {{ $value }} per second (excluding client-initiated closes)"
+          runbook_url: "https://wiki.company.com/runbooks/sse-connection-drops"
+
+      - alert: SSEErrors
+        expr: rate(sse_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SSE errors detected"
+          description: "SSE error rate is {{ $value }} per second for error type {{ $labels.error_type }}"
+          runbook_url: "https://wiki.company.com/runbooks/sse-errors"
+
+      - alert: SSEHighActiveConnections
+        expr: sse_active_connections > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of SSE connections"
+          description: "{{ $value }} active SSE connections. Monitor server resources."
+          runbook_url: "https://wiki.company.com/runbooks/sse-high-connections"
+
+  - name: application_alerts
+    interval: 30s
+    rules:
+      - alert: HighMessageProcessingLatency
+        expr: histogram_quantile(0.95, rate(kafka_consumer_message_processing_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High message processing latency"
+          description: "95th percentile message processing time is {{ $value }}s. End-to-end latency is elevated."
+          runbook_url: "https://wiki.company.com/runbooks/message-processing-latency"
+
+      - alert: MessageProcessingLatencyCritical
+        expr: histogram_quantile(0.95, rate(kafka_consumer_message_processing_duration_seconds_bucket[5m])) > 15
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical message processing latency"
+          description: "95th percentile message processing time is {{ $value }}s. System is severely backlogged."
+          runbook_url: "https://wiki.company.com/runbooks/message-processing-latency-critical"
+
+      - alert: MessageProcessingFailures
+        expr: |
+          (
+            rate(kafka_consumer_messages_consumed_total{status="error"}[5m])
+            /
+            rate(kafka_consumer_messages_consumed_total[5m])
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Message processing failures detected"
+          description: "{{ $value | humanizePercentage }} of messages are failing to process."
+          runbook_url: "https://wiki.company.com/runbooks/message-processing-failures"
+
+      - alert: NoMessagesProcessed
+        expr: rate(kafka_consumer_messages_consumed_total[10m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No messages being processed"
+          description: "No messages have been processed in the last 10 minutes. Check if consumers are running."
+          runbook_url: "https://wiki.company.com/runbooks/no-messages-processed"

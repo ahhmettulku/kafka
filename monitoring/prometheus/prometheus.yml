@@ -1,0 +1,125 @@
+# =============================================================================
+# Prometheus Configuration for Kafka Message Board Application
+# =============================================================================
+# This configuration scrapes metrics from multiple sources:
+# - Next.js API Server (HTTP, SSE, Kafka Producer, Redis metrics)
+# - Kafka Consumer Process (Consumer, Redis metrics)
+# - Prometheus self-monitoring
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'kafka-message-board'
+    environment: 'development'
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "alerts.yml"
+
+# =============================================================================
+# Scrape Configurations
+# =============================================================================
+scrape_configs:
+
+  # ---------------------------------------------------------------------------
+  # Prometheus Self-Monitoring
+  # ---------------------------------------------------------------------------
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+    scrape_interval: 30s
+
+  # ---------------------------------------------------------------------------
+  # Next.js Application Metrics (API Server)
+  # ---------------------------------------------------------------------------
+  # Exposes the following metrics:
+  #
+  # Node.js Default Metrics (prefix: nodejs_):
+  #   - nodejs_active_handles_total          - Number of active handles
+  #   - nodejs_active_requests_total         - Number of active requests
+  #   - nodejs_eventloop_lag_seconds         - Event loop lag in seconds
+  #   - nodejs_eventloop_lag_*_seconds       - Event loop lag percentiles
+  #   - nodejs_external_memory_bytes         - External memory size
+  #   - nodejs_gc_duration_seconds           - GC duration histogram
+  #   - nodejs_heap_size_*_bytes             - Heap memory metrics
+  #   - nodejs_version_info                  - Node.js version info
+  #   - process_cpu_*                        - CPU usage metrics
+  #   - process_resident_memory_bytes        - Resident memory size
+  #   - process_start_time_seconds           - Process start time
+  #
+  # HTTP Request Metrics:
+  #   - http_requests_total                  - Total HTTP requests (labels: method, route, status_code)
+  #   - http_request_duration_seconds        - Request duration histogram (labels: method, route, status_code)
+  #   - http_requests_in_progress            - Current in-flight requests (labels: method, route)
+  #
+  # SSE (Server-Sent Events) Metrics:
+  #   - sse_active_connections               - Current active SSE connections
+  #   - sse_connections_total                - Total SSE connections (labels: status)
+  #   - sse_messages_sent_total              - Total messages sent via SSE (labels: type)
+  #   - sse_errors_total                     - Total SSE errors (labels: error_type)
+  #
+  # Kafka Producer Metrics:
+  #   - kafka_producer_messages_sent_total   - Messages sent to Kafka (labels: topic, status)
+  #   - kafka_producer_send_duration_seconds - Producer send latency (labels: topic)
+  #   - kafka_producer_connection_status     - Producer connection status (1=connected, 0=disconnected)
+  #   - kafka_producer_errors_total          - Producer errors (labels: topic, error_type)
+  #
+  # Redis Metrics (from API operations):
+  #   - redis_operations_total               - Total Redis operations (labels: operation, status)
+  #   - redis_operation_duration_seconds     - Redis operation latency (labels: operation)
+  #   - redis_connection_status              - Redis connection status (labels: client_type)
+  #   - redis_messages_list_size             - Size of messages list in Redis
+  #   - redis_pubsub_active_subscriptions    - Active Pub/Sub subscriptions
+  #
+  - job_name: 'nextjs-app'
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+        labels:
+          service: 'nextjs-app'
+          process: 'api-server'
+    metrics_path: '/api/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ---------------------------------------------------------------------------
+  # Kafka Consumer Process Metrics
+  # ---------------------------------------------------------------------------
+  # Exposes the following metrics:
+  #
+  # Node.js Default Metrics (prefix: nodejs_):
+  #   - Same as above (CPU, memory, GC, event loop metrics)
+  #
+  # Kafka Consumer Metrics:
+  #   - kafka_consumer_messages_consumed_total           - Messages consumed (labels: topic, partition, status)
+  #   - kafka_consumer_message_processing_duration_seconds - Processing time (labels: topic, partition)
+  #   - kafka_consumer_lag                               - Consumer lag (labels: topic, partition, consumer_group)
+  #   - kafka_consumer_connection_status                 - Consumer connection status (1=connected, 0=disconnected)
+  #   - kafka_consumer_current_offset                    - Current offset (labels: topic, partition, consumer_group)
+  #   - kafka_consumer_high_water_mark                   - High water mark (labels: topic, partition)
+  #   - kafka_consumer_errors_total                      - Consumer errors (labels: topic, partition, error_type)
+  #
+  # Redis Metrics (from consumer operations):
+  #   - redis_operations_total               - Total Redis operations (labels: operation, status)
+  #   - redis_operation_duration_seconds     - Redis operation latency (labels: operation)
+  #   - redis_connection_status              - Redis connection status (labels: client_type)
+  #   - redis_messages_list_size             - Size of messages list in Redis
+  #   - redis_pubsub_active_subscriptions    - Active Pub/Sub subscriptions
+  #
+  - job_name: 'kafka-consumer'
+    static_configs:
+      - targets: ['host.docker.internal:9091']
+        labels:
+          service: 'kafka-consumer'
+          process: 'consumer'
+    scrape_interval: 10s
+    scrape_timeout: 5s

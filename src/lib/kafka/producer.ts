@@ -1,5 +1,12 @@
-import kafka from './client';
-import { Message } from './types';
+import { CompressionTypes } from "kafkajs";
+import kafka from "./client";
+import { Message } from "./types";
+import {
+  producerMessagesSent,
+  producerSendDuration,
+  producerConnectionStatus,
+  producerMessagesSizeBytes,
+} from "@/lib/metrics/kafka-metrics";
 
 const producer = kafka.producer();
 
@@ -9,33 +16,51 @@ export async function connectProducer() {
   if (!isConnected) {
     await producer.connect();
     isConnected = true;
-    console.log('Kafka producer connected');
+    producerConnectionStatus.set(1);
+    console.log("Kafka producer connected");
   }
 }
 
 export async function sendMessage(message: Message) {
   await connectProducer();
 
-  const topic = process.env.KAFKA_TOPIC || 'message-board';
+  const topic = process.env.KAFKA_TOPIC || "message-board";
+  const timer = producerSendDuration.startTimer({ topic });
 
-  await producer.send({
-    topic,
-    messages: [
+  try {
+    await producer.send({
+      topic,
+      messages: [
+        {
+          key: message.id,
+          value: JSON.stringify(message),
+          timestamp: message.timestamp.toString(),
+        },
+      ],
+      compression: CompressionTypes.LZ4,
+    });
+
+    producerMessagesSent.inc({ topic, status: "success" });
+    producerMessagesSizeBytes.observe(
       {
-        key: message.id,
-        value: JSON.stringify(message),
-        timestamp: message.timestamp.toString()
-      }
-    ]
-  });
-
-  console.log(`Message sent to topic ${topic}:`, message.id);
+        topic,
+      },
+      Buffer.byteLength(JSON.stringify(message), "utf8")
+    );
+    console.log(`Message sent to topic ${topic}:`, message.id);
+  } catch (error) {
+    producerMessagesSent.inc({ topic, status: "error" });
+    throw error;
+  } finally {
+    timer();
+  }
 }
 
 export async function disconnectProducer() {
   if (isConnected) {
     await producer.disconnect();
     isConnected = false;
-    console.log('Kafka producer disconnected');
+    producerConnectionStatus.set(0);
+    console.log("Kafka producer disconnected");
   }
 }

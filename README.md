@@ -367,7 +367,9 @@ The Grafana dashboard includes 6 sections with 20+ panels:
 - `kafka_producer_messages_sent_total` - Messages sent with success/error status
 - `kafka_producer_send_duration_seconds` - Producer send latency histogram
 - `kafka_consumer_messages_consumed_total` - Messages consumed per partition
-- `kafka_consumer_lag` - Consumer lag (updated every 30 seconds)
+- `kafka_consumer_lag` - Consumer lag in message count (updated every 30 seconds)
+- `kafka_consumer_lag_seconds` - Consumer lag in seconds (time since message was produced)
+- `kafka_consumer_message_processing_duration_seconds` - Message processing latency
 
 **Redis Metrics:**
 - `redis_operations_total` - Operations by type (lpush, ltrim, lrange, publish)
@@ -384,13 +386,29 @@ The Grafana dashboard includes 6 sections with 20+ panels:
 
 ### Alert Rules
 
-Pre-configured alerts in Prometheus:
+Production-ready alerts with intelligent thresholds. All alerts include `runbook_url` annotations for incident response.
 
-- **KafkaHighConsumerLag** - Consumer lag exceeds 100 for 5 minutes
-- **KafkaProducerErrors** - Producer error rate above 0.1/sec
-- **RedisConnectionDown** - Redis connection lost for 1 minute
-- **HighHTTPErrorRate** - 5xx error rate above 0.05/sec
-- **SlowHTTPResponses** - p95 response time above 2 seconds
+**Kafka Alerts (velocity-based, not absolute thresholds):**
+- **KafkaConsumerLagGrowing** - Lag increasing at >10 msgs/sec (consumer falling behind)
+- **KafkaConsumerLagGrowingFast** - Lag increasing at >100 msgs/sec (critical)
+- **KafkaHighTimeToDrain** - Would take >5 min to catch up at current rate
+- **KafkaCriticalTimeToDrain** - Would take >30 min to catch up (SLA breach)
+- **KafkaConsumerThroughputDrop** - Throughput dropped to <50% of hourly average
+- **KafkaHighConsumerLagSeconds** - Messages are >60 seconds old
+- **KafkaProducerErrors** / **KafkaConsumerErrors** - Error rate above 0.1/sec
+
+**Redis Alerts:**
+- **RedisConnectionDown** - Connection lost for 1 minute
+- **RedisHighMemoryUsage** - Memory usage >85% (warning) / >95% (critical)
+- **RedisConnectionPoolExhaustion** - Pool <10% available
+- **RedisSlowOperations** - p95 latency >100ms (warning) / >500ms (critical)
+- **RedisEvictions** - Keys being evicted due to memory pressure
+
+**HTTP/Application Alerts:**
+- **HighHTTPErrorRate** - 5xx error rate >1% of requests
+- **SlowHTTPResponses** - p95 response time >2s (warning) / >5s (critical)
+- **MessageProcessingFailures** - >1% of messages failing
+- **NoMessagesProcessed** - No messages consumed in 10 minutes
 
 ### Verifying Metrics
 

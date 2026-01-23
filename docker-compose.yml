@@ -68,6 +68,21 @@ services:
       timeout: 3s
       retries: 5
 
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:latest
+    container_name: kafka-exporter
+    command:
+      - "--kafka.server=kafka:29092"
+      - "--topic.filter=.*"
+      - "--group.filter=.*"
+    ports:
+      - "9308:9308"
+    networks:
+      - kafka-network
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus:v2.48.0
     container_name: prometheus

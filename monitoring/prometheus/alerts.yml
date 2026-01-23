@@ -1,4 +1,73 @@
 groups:
+  # ---------------------------------------------------------------------------
+  # Kafka Broker Alerts (from kafka-exporter)
+  # ---------------------------------------------------------------------------
+  - name: kafka_broker_alerts
+    interval: 30s
+    rules:
+      - alert: KafkaBrokersDown
+        expr: kafka_brokers < 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No Kafka brokers available"
+          description: "Kafka cluster has {{ $value }} brokers. Expected at least 1."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-brokers-down"
+
+      - alert: KafkaTopicPartitionUnderReplicated
+        expr: kafka_topic_partition_under_replicated_partition > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka partition under-replicated"
+          description: "Topic {{ $labels.topic }} partition {{ $labels.partition }} is under-replicated."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-under-replicated"
+
+      - alert: KafkaPartitionNoLeader
+        expr: kafka_topic_partition_leader == -1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka partition has no leader"
+          description: "Topic {{ $labels.topic }} partition {{ $labels.partition }} has no leader. Writes will fail."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-no-leader"
+
+      - alert: KafkaConsumerGroupLagHigh
+        expr: kafka_consumergroup_lag > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High consumer group lag (broker view)"
+          description: "Consumer group {{ $labels.consumergroup }} has lag of {{ $value }} on topic {{ $labels.topic }}."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-consumergroup-lag"
+
+      - alert: KafkaConsumerGroupLagCritical
+        expr: kafka_consumergroup_lag > 100000
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical consumer group lag (broker view)"
+          description: "Consumer group {{ $labels.consumergroup }} has lag of {{ $value }} on topic {{ $labels.topic }}. Immediate attention required."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-consumergroup-lag-critical"
+
+      - alert: KafkaNoActiveConsumers
+        expr: kafka_consumergroup_members == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No active consumers in group"
+          description: "Consumer group {{ $labels.consumergroup }} has no active members."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-no-consumers"
+
+  # ---------------------------------------------------------------------------
+  # Kafka Application Alerts (from app metrics)
+  # ---------------------------------------------------------------------------
   - name: kafka_alerts
     interval: 30s
     rules:

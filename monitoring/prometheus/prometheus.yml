@@ -123,3 +123,34 @@ scrape_configs:
           process: 'consumer'
     scrape_interval: 10s
     scrape_timeout: 5s
+
+  # ---------------------------------------------------------------------------
+  # Kafka Broker Metrics (via kafka-exporter)
+  # ---------------------------------------------------------------------------
+  # Exposes broker-level metrics directly from Kafka:
+  #
+  # Broker Metrics:
+  #   - kafka_brokers                              - Number of brokers in cluster
+  #
+  # Topic Metrics:
+  #   - kafka_topic_partitions                     - Number of partitions per topic
+  #   - kafka_topic_partition_current_offset       - Current offset of partition
+  #   - kafka_topic_partition_oldest_offset        - Oldest offset of partition
+  #   - kafka_topic_partition_leader               - Leader broker ID for partition
+  #   - kafka_topic_partition_leader_is_preferred  - Is leader the preferred replica
+  #   - kafka_topic_partition_replicas             - Number of replicas for partition
+  #   - kafka_topic_partition_in_sync_replica      - Number of in-sync replicas
+  #   - kafka_topic_partition_under_replicated     - Is partition under-replicated
+  #
+  # Consumer Group Metrics:
+  #   - kafka_consumergroup_current_offset         - Current offset of consumer group
+  #   - kafka_consumergroup_lag                    - Lag of consumer group
+  #   - kafka_consumergroup_members                - Number of members in consumer group
+  #
+  - job_name: 'kafka-broker'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+        labels:
+          service: 'kafka-broker'
+    scrape_interval: 15s
+    scrape_timeout: 10s

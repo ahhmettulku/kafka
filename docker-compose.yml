@@ -85,17 +85,17 @@ services:
     restart: unless-stopped
 
   jmx-exporter:
-    image: bitnami/jmx-exporter:1.0.1
+    image: sscaling/jmx-prometheus-exporter:0.12.0
     container_name: jmx-exporter
     ports:
       - "5556:5556"
     volumes:
-      - ./monitoring/prometheus/jmx-exporter-config.yml:/etc/jmx-exporter/config.yml:ro
+      - ./monitoring/prometheus/jmx-exporter-config.yml:/opt/jmx_exporter/config.yml:ro
     environment:
-      - JMX_EXPORTER_CONFIG_FILE=/etc/jmx-exporter/config.yml
-      - JMX_EXPORTER_TARGET_HOST=kafka
-      - JMX_EXPORTER_TARGET_PORT=9101
-      - JMX_EXPORTER_HTTP_PORT=5556
+      - SERVICE_PORT=5556
+    command:
+      - "5556"
+      - /opt/jmx_exporter/config.yml
     networks:
       - kafka-network
     depends_on:

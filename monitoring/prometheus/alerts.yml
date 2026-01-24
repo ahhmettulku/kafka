@@ -66,11 +66,199 @@ groups:
           runbook_url: "https://wiki.company.com/runbooks/kafka-no-consumers"
 
   # ---------------------------------------------------------------------------
+  # Kafka JMX Broker Alerts (from jmx-exporter)
+  # ---------------------------------------------------------------------------
+  - name: kafka_jmx_alerts
+    interval: 30s
+    rules:
+      - alert: KafkaUnderReplicatedPartitions
+        expr: kafka_server_replicamanager_underreplicatedpartitions > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka has under-replicated partitions"
+          description: "Kafka broker has {{ $value }} under-replicated partitions. Data durability may be at risk."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-under-replicated-jmx"
+
+      - alert: KafkaOfflinePartitions
+        expr: kafka_controller_kafkacontroller_offlinepartitionscount > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka has offline partitions"
+          description: "Kafka controller reports {{ $value }} offline partitions. These partitions are unavailable for reads/writes."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-offline-partitions"
+
+      - alert: KafkaNoActiveController
+        expr: kafka_controller_kafkacontroller_activecontrollercount == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No active Kafka controller"
+          description: "No Kafka controller is active. Cluster cannot perform leader elections or partition reassignments."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-no-controller"
+
+      - alert: KafkaISRShrinking
+        expr: rate(kafka_server_replicamanager_isrshrinkspersec_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka ISR is shrinking"
+          description: "In-sync replica set is shrinking at {{ $value }} partitions/sec. Possible broker issues or network problems."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-isr-shrinking"
+
+      - alert: KafkaISRShrinkingRapidly
+        expr: rate(kafka_server_replicamanager_isrshrinkspersec_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka ISR is shrinking rapidly"
+          description: "In-sync replica set is shrinking rapidly at {{ $value }} partitions/sec. Immediate investigation required."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-isr-shrinking-critical"
+
+      - alert: KafkaHighProduceLatency
+        expr: kafka_network_requestmetrics_totaltime_ms_p99{request="Produce"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Kafka produce request latency"
+          description: "P99 produce request latency is {{ $value }}ms. Producer performance may be degraded."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-produce-latency"
+
+      - alert: KafkaCriticalProduceLatency
+        expr: kafka_network_requestmetrics_totaltime_ms_p99{request="Produce"} > 5000
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical Kafka produce request latency"
+          description: "P99 produce request latency is {{ $value }}ms. Producers are severely impacted."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-produce-latency-critical"
+
+      - alert: KafkaHighFetchLatency
+        expr: kafka_network_requestmetrics_totaltime_ms_p99{request=~"Fetch|FetchConsumer"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Kafka fetch request latency"
+          description: "P99 {{ $labels.request }} latency is {{ $value }}ms. Consumer performance may be degraded."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-fetch-latency"
+
+      - alert: KafkaNetworkProcessorIdleLow
+        expr: kafka_network_socketserver_networkprocessor_avg_idle_percent < 0.3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka network processor utilization high"
+          description: "Network processor idle percentage is {{ $value | humanizePercentage }}. Broker may be overloaded."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-network-processor"
+
+      - alert: KafkaRequestHandlerIdleLow
+        expr: kafka_server_kafkarequesthandlerpool_avg_idle_percent < 0.3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka request handler utilization high"
+          description: "Request handler idle percentage is {{ $value | humanizePercentage }}. Broker may be overloaded."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-request-handler"
+
+      - alert: KafkaLogFlushLatencyHigh
+        expr: kafka_log_logflushstats_logflush_time_ms_p99 > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Kafka log flush latency"
+          description: "P99 log flush latency is {{ $value }}ms. Disk I/O may be a bottleneck."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-log-flush-latency"
+
+      - alert: KafkaOfflineLogDirectory
+        expr: kafka_log_logmanager_offline_log_directory_count > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka log directory offline"
+          description: "{{ $value }} log directories are offline. Data may be inaccessible."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-offline-log-directory"
+
+      - alert: KafkaBrokerHighHeapUsage
+        expr: kafka_jvm_heap_memory_used_bytes / kafka_jvm_heap_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka broker high heap memory usage"
+          description: "Kafka broker heap usage is {{ $value | humanizePercentage }}. Risk of GC pressure or OOM."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-heap-usage"
+
+      - alert: KafkaBrokerCriticalHeapUsage
+        expr: kafka_jvm_heap_memory_used_bytes / kafka_jvm_heap_memory_max_bytes > 0.95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka broker critical heap memory usage"
+          description: "Kafka broker heap usage is {{ $value | humanizePercentage }}. OOM imminent."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-heap-usage-critical"
+
+      - alert: KafkaBrokerHighCPU
+        expr: kafka_jvm_process_cpu_load > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka broker high CPU usage"
+          description: "Kafka broker CPU usage is {{ $value | humanizePercentage }}."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-cpu-usage"
+
+      - alert: KafkaPreferredReplicaImbalance
+        expr: kafka_controller_kafkacontroller_preferredreplicaimbalancecount > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka preferred replica imbalance"
+          description: "{{ $value }} partitions have non-preferred leaders. Consider running preferred replica election."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-replica-imbalance"
+
+  # ---------------------------------------------------------------------------
   # Kafka Application Alerts (from app metrics)
   # ---------------------------------------------------------------------------
   - name: kafka_alerts
     interval: 30s
     rules:
+      # Alert when producer is disconnected
+      - alert: KafkaProducerDisconnected
+        expr: kafka_producer_connection_status == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka producer is disconnected"
+          description: "Kafka producer connection is down. Messages cannot be sent to Kafka."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-producer-disconnected"
+
+      # Alert when consumer is disconnected
+      - alert: KafkaConsumerDisconnected
+        expr: kafka_consumer_connection_status == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka consumer is disconnected"
+          description: "Kafka consumer connection is down. Messages are not being consumed."
+          runbook_url: "https://wiki.company.com/runbooks/kafka-consumer-disconnected"
+
       # Alert when lag is growing - indicates consumer can't keep up with producer
       - alert: KafkaConsumerLagGrowing
         expr: deriv(kafka_consumer_lag[5m]) > 10

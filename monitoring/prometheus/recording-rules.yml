@@ -1,0 +1,286 @@
+# =============================================================================
+# Prometheus Recording Rules for Kafka Monitoring
+# =============================================================================
+# Recording rules precompute frequently used expressions to improve query
+# performance and reduce load on Prometheus during dashboard rendering.
+# =============================================================================
+
+groups:
+  # ---------------------------------------------------------------------------
+  # Kafka Consumer Lag Recording Rules
+  # ---------------------------------------------------------------------------
+  - name: kafka_lag_recording_rules
+    interval: 30s
+    rules:
+      # Total consumer lag summed by topic
+      - record: kafka:consumer_lag:sum_by_topic
+        expr: sum by (topic) (kafka_consumer_lag)
+
+      # Total consumer lag summed by consumer group
+      - record: kafka:consumer_lag:sum_by_consumer_group
+        expr: sum by (consumer_group) (kafka_consumer_lag)
+
+      # Total consumer lag across all topics and partitions
+      - record: kafka:consumer_lag:total
+        expr: sum(kafka_consumer_lag)
+
+      # Consumer lag from broker view (kafka-exporter)
+      - record: kafka:consumergroup_lag:sum_by_group
+        expr: sum by (consumergroup) (kafka_consumergroup_lag)
+
+      # Consumer lag from broker view by topic
+      - record: kafka:consumergroup_lag:sum_by_topic
+        expr: sum by (topic) (kafka_consumergroup_lag)
+
+  # ---------------------------------------------------------------------------
+  # Kafka Throughput Recording Rules
+  # ---------------------------------------------------------------------------
+  - name: kafka_throughput_recording_rules
+    interval: 30s
+    rules:
+      # Consumer throughput rate (5 minute window)
+      - record: kafka:consumer_throughput:rate5m
+        expr: rate(kafka_consumer_messages_consumed_total{status="success"}[5m])
+
+      # Consumer throughput sum by topic
+      - record: kafka:consumer_throughput:rate5m:sum_by_topic
+        expr: sum by (topic) (rate(kafka_consumer_messages_consumed_total{status="success"}[5m]))
+
+      # Total consumer throughput
+      - record: kafka:consumer_throughput:rate5m:total
+        expr: sum(rate(kafka_consumer_messages_consumed_total{status="success"}[5m]))
+
+      # Producer throughput rate (5 minute window)
+      - record: kafka:producer_throughput:rate5m
+        expr: rate(kafka_producer_messages_sent_total{status="success"}[5m])
+
+      # Producer throughput sum by topic
+      - record: kafka:producer_throughput:rate5m:sum_by_topic
+        expr: sum by (topic) (rate(kafka_producer_messages_sent_total{status="success"}[5m]))
+
+      # Total producer throughput
+      - record: kafka:producer_throughput:rate5m:total
+        expr: sum(rate(kafka_producer_messages_sent_total{status="success"}[5m]))
+
+  # ---------------------------------------------------------------------------
+  # Kafka Error Rate Recording Rules
+  # ---------------------------------------------------------------------------
+  - name: kafka_error_recording_rules
+    interval: 30s
+    rules:
+      # Producer error rate (5 minute window)
+      - record: kafka:producer_error_rate:rate5m
+        expr: rate(kafka_producer_messages_sent_total{status="error"}[5m])
+
+      # Total producer error rate
+      - record: kafka:producer_error_rate:rate5m:total
+        expr: sum(rate(kafka_producer_messages_sent_total{status="error"}[5m]))
+
+      # Consumer error rate (5 minute window)
+      - record: kafka:consumer_error_rate:rate5m
+        expr: rate(kafka_consumer_messages_consumed_total{status="error"}[5m])
+
+      # Total consumer error rate
+      - record: kafka:consumer_error_rate:rate5m:total
+        expr: sum(rate(kafka_consumer_messages_consumed_total{status="error"}[5m]))
+
+      # Producer error ratio (errors / total)
+      - record: kafka:producer_error_ratio:rate5m
+        expr: |
+          sum(rate(kafka_producer_messages_sent_total{status="error"}[5m]))
+          /
+          (sum(rate(kafka_producer_messages_sent_total[5m])) > 0)
+
+      # Consumer error ratio (errors / total)
+      - record: kafka:consumer_error_ratio:rate5m
+        expr: |
+          sum(rate(kafka_consumer_messages_consumed_total{status="error"}[5m]))
+          /
+          (sum(rate(kafka_consumer_messages_consumed_total[5m])) > 0)
+
+  # ---------------------------------------------------------------------------
+  # Kafka Latency Recording Rules
+  # ---------------------------------------------------------------------------
+  - name: kafka_latency_recording_rules
+    interval: 30s
+    rules:
+      # Producer send latency percentiles
+      - record: kafka:producer_latency:p50
+        expr: histogram_quantile(0.50, rate(kafka_producer_send_duration_seconds_bucket[5m]))
+
+      - record: kafka:producer_latency:p95
+        expr: histogram_quantile(0.95, rate(kafka_producer_send_duration_seconds_bucket[5m]))
+
+      - record: kafka:producer_latency:p99
+        expr: histogram_quantile(0.99, rate(kafka_producer_send_duration_seconds_bucket[5m]))
+
+      # Consumer processing latency percentiles
+      - record: kafka:consumer_processing_latency:p50
+        expr: histogram_quantile(0.50, rate(kafka_consumer_message_processing_duration_seconds_bucket[5m]))
+
+      - record: kafka:consumer_processing_latency:p95
+        expr: histogram_quantile(0.95, rate(kafka_consumer_message_processing_duration_seconds_bucket[5m]))
+
+      - record: kafka:consumer_processing_latency:p99
+        expr: histogram_quantile(0.99, rate(kafka_consumer_message_processing_duration_seconds_bucket[5m]))
+
+  # ---------------------------------------------------------------------------
+  # Kafka Broker JMX Recording Rules
+  # ---------------------------------------------------------------------------
+  - name: kafka_broker_recording_rules
+    interval: 30s
+    rules:
+      # Total bytes in rate across all topics
+      - record: kafka:broker_bytes_in:rate5m:total
+        expr: sum(rate(kafka_server_brokertopicmetrics_bytesin_total[5m]))
+
+      # Total bytes out rate across all topics
+      - record: kafka:broker_bytes_out:rate5m:total
+        expr: sum(rate(kafka_server_brokertopicmetrics_bytesout_total[5m]))
+
+      # Bytes in rate by topic
+      - record: kafka:broker_bytes_in:rate5m:by_topic
+        expr: sum by (topic) (rate(kafka_server_brokertopicmetrics_bytesin_total[5m]))
+
+      # Bytes out rate by topic
+      - record: kafka:broker_bytes_out:rate5m:by_topic
+        expr: sum by (topic) (rate(kafka_server_brokertopicmetrics_bytesout_total[5m]))
+
+      # Total messages in rate from broker
+      - record: kafka:broker_messages_in:rate5m:total
+        expr: sum(rate(kafka_server_brokertopicmetrics_messagesin_total[5m]))
+
+      # ISR shrink/expand rates
+      - record: kafka:isr_shrinks:rate5m
+        expr: rate(kafka_server_replicamanager_isrshrinkspersec_total[5m])
+
+      - record: kafka:isr_expands:rate5m
+        expr: rate(kafka_server_replicamanager_isrexpandspersec_total[5m])
+
+  # ---------------------------------------------------------------------------
+  # Kafka Request Latency Recording Rules (JMX)
+  # ---------------------------------------------------------------------------
+  - name: kafka_request_latency_recording_rules
+    interval: 30s
+    rules:
+      # Produce request latency
+      - record: kafka:request_latency:produce:p99
+        expr: kafka_network_requestmetrics_totaltime_ms_p99{request="Produce"}
+
+      - record: kafka:request_latency:produce:p95
+        expr: kafka_network_requestmetrics_totaltime_ms_p95{request="Produce"}
+
+      - record: kafka:request_latency:produce:mean
+        expr: kafka_network_requestmetrics_totaltime_ms_mean{request="Produce"}
+
+      # Fetch request latency
+      - record: kafka:request_latency:fetch:p99
+        expr: kafka_network_requestmetrics_totaltime_ms_p99{request="Fetch"}
+
+      - record: kafka:request_latency:fetch:p95
+        expr: kafka_network_requestmetrics_totaltime_ms_p95{request="Fetch"}
+
+      - record: kafka:request_latency:fetch:mean
+        expr: kafka_network_requestmetrics_totaltime_ms_mean{request="Fetch"}
+
+      # FetchConsumer request latency
+      - record: kafka:request_latency:fetchconsumer:p99
+        expr: kafka_network_requestmetrics_totaltime_ms_p99{request="FetchConsumer"}
+
+      - record: kafka:request_latency:fetchconsumer:mean
+        expr: kafka_network_requestmetrics_totaltime_ms_mean{request="FetchConsumer"}
+
+  # ---------------------------------------------------------------------------
+  # Redis Recording Rules
+  # ---------------------------------------------------------------------------
+  - name: redis_recording_rules
+    interval: 30s
+    rules:
+      # Redis operation rate by operation type
+      - record: redis:operations:rate5m:by_operation
+        expr: sum by (operation) (rate(redis_operations_total{status="success"}[5m]))
+
+      # Total Redis operation rate
+      - record: redis:operations:rate5m:total
+        expr: sum(rate(redis_operations_total{status="success"}[5m]))
+
+      # Redis error rate
+      - record: redis:error_rate:rate5m:total
+        expr: sum(rate(redis_operations_total{status="error"}[5m]))
+
+      # Redis operation latency p95
+      - record: redis:latency:p95
+        expr: histogram_quantile(0.95, rate(redis_operation_duration_seconds_bucket[5m]))
+
+  # ---------------------------------------------------------------------------
+  # HTTP Recording Rules
+  # ---------------------------------------------------------------------------
+  - name: http_recording_rules
+    interval: 30s
+    rules:
+      # HTTP request rate by route
+      - record: http:requests:rate5m:by_route
+        expr: sum by (route) (rate(http_requests_total[5m]))
+
+      # Total HTTP request rate
+      - record: http:requests:rate5m:total
+        expr: sum(rate(http_requests_total[5m]))
+
+      # HTTP error rate (5xx)
+      - record: http:errors_5xx:rate5m:total
+        expr: sum(rate(http_requests_total{status_code=~"5.."}[5m]))
+
+      # HTTP error ratio
+      - record: http:error_ratio:rate5m
+        expr: |
+          sum(rate(http_requests_total{status_code=~"5.."}[5m]))
+          /
+          (sum(rate(http_requests_total[5m])) > 0)
+
+      # HTTP latency percentiles
+      - record: http:latency:p50
+        expr: histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m]))
+
+      - record: http:latency:p95
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+
+      - record: http:latency:p99
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))
+
+  # ---------------------------------------------------------------------------
+  # SSE Recording Rules
+  # ---------------------------------------------------------------------------
+  - name: sse_recording_rules
+    interval: 30s
+    rules:
+      # SSE message rate
+      - record: sse:messages:rate5m:total
+        expr: sum(rate(sse_messages_sent_total[5m]))
+
+      # SSE connection rate
+      - record: sse:connections:rate5m:total
+        expr: sum(rate(sse_connections_total[5m]))
+
+      # SSE error rate
+      - record: sse:errors:rate5m:total
+        expr: sum(rate(sse_errors_total[5m]))
+
+  # ---------------------------------------------------------------------------
+  # Time-to-Drain Recording Rules
+  # ---------------------------------------------------------------------------
+  - name: kafka_ttd_recording_rules
+    interval: 30s
+    rules:
+      # Time to drain - how long to catch up at current rate
+      - record: kafka:time_to_drain:seconds
+        expr: |
+          kafka_consumer_lag
+          /
+          (rate(kafka_consumer_messages_consumed_total{status="success"}[5m]) > 0)
+
+      # Time to drain by topic
+      - record: kafka:time_to_drain:seconds:by_topic
+        expr: |
+          sum by (topic) (kafka_consumer_lag)
+          /
+          (sum by (topic) (rate(kafka_consumer_messages_consumed_total{status="success"}[5m])) > 0)

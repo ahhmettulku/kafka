@@ -10,9 +10,11 @@
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+  scrape_timeout: 10s
   external_labels:
     cluster: 'kafka-message-board'
     environment: 'development'
+    region: 'local'
 
 # Alerting configuration
 alerting:
@@ -23,6 +25,7 @@ alerting:
 # Load rules once and periodically evaluate them
 rule_files:
   - "alerts.yml"
+  - "recording-rules.yml"
 
 # =============================================================================
 # Scrape Configurations
@@ -152,5 +155,53 @@ scrape_configs:
       - targets: ['kafka-exporter:9308']
         labels:
           service: 'kafka-broker'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # ---------------------------------------------------------------------------
+  # Kafka JMX Metrics (via jmx-exporter)
+  # ---------------------------------------------------------------------------
+  # Exposes deep Kafka broker metrics from JMX:
+  #
+  # Broker Topic Metrics:
+  #   - kafka_server_brokertopicmetrics_bytesin_total      - Bytes received per topic
+  #   - kafka_server_brokertopicmetrics_bytesout_total     - Bytes sent per topic
+  #   - kafka_server_brokertopicmetrics_messagesin_total   - Messages received per topic
+  #   - kafka_server_brokertopicmetrics_*_rate             - Rate metrics (1-min average)
+  #
+  # Replica Manager Metrics:
+  #   - kafka_server_replicamanager_underreplicatedpartitions - Under-replicated partitions count
+  #   - kafka_server_replicamanager_partitioncount            - Total partition count
+  #   - kafka_server_replicamanager_leadercount               - Leader partition count
+  #   - kafka_server_replicamanager_isr_shrinks_rate          - ISR shrink rate
+  #   - kafka_server_replicamanager_isr_expands_rate          - ISR expand rate
+  #
+  # Request Metrics:
+  #   - kafka_network_requestmetrics_totaltime_ms_mean        - Mean request time by type
+  #   - kafka_network_requestmetrics_totaltime_ms_p99         - P99 request latency
+  #   - kafka_network_requestmetrics_totaltime_ms_p95         - P95 request latency
+  #   - kafka_network_requestmetrics_requests_rate            - Request rate by type
+  #
+  # Controller Metrics:
+  #   - kafka_controller_kafkacontroller_activecontrollercount - Active controller (1 = this broker)
+  #   - kafka_controller_kafkacontroller_offlinepartitionscount - Offline partitions
+  #   - kafka_controller_kafkacontroller_preferredreplicaimbalancecount - Imbalanced replicas
+  #
+  # Log Metrics:
+  #   - kafka_log_log_size_bytes                             - Log size per topic/partition
+  #   - kafka_log_logflushstats_logflush_time_ms_mean        - Log flush latency
+  #   - kafka_log_logmanager_offline_log_directory_count     - Offline log directories
+  #
+  # JVM Metrics:
+  #   - kafka_jvm_heap_memory_used_bytes                     - JVM heap usage
+  #   - kafka_jvm_gc_collection_count_total                  - GC collection count
+  #   - kafka_jvm_gc_collection_time_ms_total                - GC time
+  #   - kafka_jvm_process_cpu_load                           - Process CPU usage
+  #
+  - job_name: 'kafka-jmx'
+    static_configs:
+      - targets: ['jmx-exporter:5556']
+        labels:
+          service: 'kafka-jmx'
     scrape_interval: 15s
     scrape_timeout: 10s

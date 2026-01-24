@@ -37,7 +37,7 @@ export async function sendMessage(message: Message) {
           timestamp: message.timestamp.toString(),
         },
       ],
-      compression: CompressionTypes.LZ4,
+      compression: CompressionTypes.GZIP,
     });
 
     producerMessagesSent.inc({ topic, status: "success" });
@@ -45,7 +45,7 @@ export async function sendMessage(message: Message) {
       {
         topic,
       },
-      Buffer.byteLength(JSON.stringify(message), "utf8")
+      Buffer.byteLength(JSON.stringify(message), "utf8"),
     );
     console.log(`Message sent to topic ${topic}:`, message.id);
   } catch (error) {

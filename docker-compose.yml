@@ -94,8 +94,11 @@ services:
     environment:
       - SERVICE_PORT=5556
     command:
+      - "java"
+      - "-jar"
+      - "/opt/jmx_exporter/jmx_prometheus_httpserver-0.12.0-jar-with-dependencies.jar"
       - "5556"
-      - /opt/jmx_exporter/config.yml
+      - "/opt/jmx_exporter/config.yml"
     networks:
       - kafka-network
     depends_on:

@@ -119,11 +119,9 @@ scrape_configs:
   #   - redis_pubsub_active_subscriptions    - Active Pub/Sub subscriptions
   #
   - job_name: 'kafka-consumer'
-    static_configs:
-      - targets: ['host.docker.internal:9091']
-        labels:
-          service: 'kafka-consumer'
-          process: 'consumer'
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/targets/consumers/*.json'
     scrape_interval: 10s
     scrape_timeout: 5s
 

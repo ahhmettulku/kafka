@@ -52,10 +52,12 @@ npm run kafka:consumer
 
 Keep this running in the background. You should see:
 ```
-Starting Kafka consumer...
+Starting Kafka consumer and metrics server...
+[Metrics Server] Listening on http://localhost:<port>/metrics
 Kafka consumer connected
 Consumer subscribed to topic: message-board
 ```
+Each consumer auto-selects a free metrics port and registers itself with Prometheus.
 
 ### 4. Start the Next.js Development Server
 
@@ -117,7 +119,7 @@ npm run dev
        │  Prometheus (9090)                   │
        │    ↓ scrapes                         │
        │  - Next.js metrics (:3000/api/metrics)
-       │  - Consumer metrics (:9091/metrics)  │
+       │  - Consumer metrics (:9xxx/metrics)  │
        │    ↓ data source                     │
        │  Grafana (3001)                      │
        │  - Pre-built Dashboard               │
@@ -348,7 +350,7 @@ This application includes a comprehensive monitoring stack with Prometheus for m
 - **Prometheus**: http://localhost:9090 - Query and explore metrics
 - **Grafana**: http://localhost:3001 - Visualize metrics (login: admin/admin)
 - **Next.js Metrics**: http://localhost:3000/api/metrics - Raw Prometheus metrics
-- **Consumer Metrics**: http://localhost:9091/metrics - Consumer process metrics
+- **Consumer Metrics**: dynamic port (see consumer logs) - Consumer process metrics
 
 ### Pre-built Grafana Dashboard
 
@@ -417,7 +419,7 @@ Production-ready alerts with intelligent thresholds. All alerts include `runbook
 curl http://localhost:3000/api/metrics | grep kafka_producer
 
 # Check consumer metrics
-curl http://localhost:9091/metrics | grep kafka_consumer
+curl http://localhost:<PORT>/metrics | grep kafka_consumer
 
 # Verify Prometheus targets
 # Visit http://localhost:9090/targets - both should show "UP"
@@ -474,7 +476,7 @@ Make sure Docker Desktop is running and WSL2 backend is enabled.
 - Check if metrics endpoints are accessible:
   ```bash
   curl http://localhost:3000/api/metrics
-  curl http://localhost:9091/metrics
+  curl http://localhost:<PORT>/metrics
   ```
 
 **Grafana dashboard not loading:**

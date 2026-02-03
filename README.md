@@ -34,10 +34,21 @@ npm run dev
 | **Prometheus** | http://localhost:9090 | Metrics & alerts |
 | **Message Board** | http://localhost:3000 | Generate traffic |
 | **Kafka UI** | http://localhost:8080 | Inspect topics |
+| **Redis** | localhost:6379 | Message storage & Pub/Sub |
 
 ## Monitoring Architecture
 
 ```
+┌─────────────────────────────────────────────────────────────┐
+│                      Data Flow                              │
+├─────────────────────────────────────────────────────────────┤
+│  Browser → Next.js API → Kafka → Consumer → Redis → SSE    │
+│                                                             │
+│  User posts message → Producer sends to Kafka topic         │
+│  Consumer reads from Kafka → Stores in Redis Lists          │
+│  Redis Pub/Sub → Pushes to SSE → Real-time browser update   │
+└─────────────────────────────────────────────────────────────┘
+
 ┌─────────────────────────────────────────────────────────────┐
 │                    Metrics Sources                          │
 ├─────────────────────────────────────────────────────────────┤
@@ -98,6 +109,15 @@ npm run dev
 | `kafka_controller_kafkacontroller_offlinepartitionscount` | Offline partitions |
 | `kafka_network_requestmetrics_totaltime_ms_p99` | Request latency percentiles |
 | `kafka_jvm_heap_memory_used_bytes` | JVM memory usage |
+
+### Redis Metrics (prom-client)
+
+| Metric | Description |
+|--------|-------------|
+| `redis_operations_total` | Operations by type (get, set, lpush, publish) |
+| `redis_operation_duration_seconds` | Operation latency histogram |
+| `redis_connection_status` | Connection health (1=connected, 0=disconnected) |
+| `redis_messages_list_size` | Number of messages stored in Redis |
 
 ## Alert Rules
 
@@ -179,6 +199,17 @@ src/lib/metrics/
 | **jmx-exporter** | Internal broker metrics | Deep diagnostics |
 
 Example: Broker shows `lag = 0`, but app shows `lag_seconds = 30s`. Consumer is keeping up with offsets but processing is slow.
+
+## Redis in This Architecture
+
+Redis serves two purposes in this application:
+
+| Purpose | How It Works |
+|---------|--------------|
+| **Message Storage** | Messages consumed from Kafka are stored in Redis Lists for quick retrieval |
+| **Real-time Updates** | Redis Pub/Sub pushes new messages to SSE clients instantly |
+
+This creates a flow: `Kafka → Consumer → Redis → SSE → Browser`
 
 ## Technology Stack
 
